@@ -1,0 +1,29 @@
+
+static EN_cntrl g_enctrl;		//!<制御ステータス
+
+
+
+// 関数ポインタ親
+VOID(*FUNC[en_END])(VOID) = {
+
+関数名
+…
+}
+
+
+
+static VOID func1(VOID)
+{
+g_enctrl = next;
+}
+
+
+
+
+呼び出し作成
+
+VOID Call(VOID) {
+
+    // 制御ステータス処理
+    FUNC[g_enStep]();
+  }
