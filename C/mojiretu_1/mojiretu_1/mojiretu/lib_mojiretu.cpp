@@ -13,13 +13,13 @@
 * @param[out] 
 * @return 
 */
-void AddValASCII2USHORT(unsigned short usval, unsigned char ucFig,unsigned char* pchar)
+unsigned char* AddValASCII2USHORT(unsigned short usval, unsigned char ucFig,unsigned char* pchar)
 {
     unsigned char uctemp[16];
     memset(uctemp, 0x0,sizeof(uctemp));
 
     decToASCIIHex( usval, ucFig,uctemp);
-    pchar = (unsigned char *)my_strcpy((char *)pchar, (char *)uctemp);
+    return (unsigned char *)my_strcpy((char *)pchar, (char *)uctemp);
 }
 
 

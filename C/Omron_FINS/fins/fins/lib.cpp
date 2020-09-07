@@ -57,6 +57,14 @@
 //    return en_RETURN_CODE_OK;
 //}
 
+
+/**
+* 数値をASCII文字（指定桁数）に変換する
+*
+* @param[in] usVal : 数値 iFig : ASCII桁数
+* @param[out] 
+* @return ASCII文字列のﾎﾟｲﾝﾀ
+*/
 unsigned char*  decToASCIIHex(unsigned short usVal, int iFig)
 {
     static char hexaDeciNum[16];                     // 最大iFig 16桁数
@@ -107,4 +115,36 @@ unsigned char *my_strcpy(unsigned char *dest, const unsigned char *src)
     }
 
     return tmp + icnt;
+}
+
+/**
+* enum ﾃﾞｰﾀ ｲﾝｸﾘﾒﾝﾄ
+*
+* @param[in] 
+* @param[out] 
+* @return 
+*/
+void UpEnumParameter(short* psEnumData, short sRangeOver)
+{
+	if (*psEnumData < sRangeOver-1) {
+		++*psEnumData;
+	} else {
+		*psEnumData = 0;
+	}
+}
+
+/**
+* enum ﾃﾞｰﾀ ｲﾝｸﾘﾒﾝﾄ (下限値指定版)
+*
+* @param[in] 
+* @param[out] 
+* @return 
+*/
+void UpEnumParameter2(short* psEnumData, short sMinimum, short sRangeOver)
+{
+	if (*psEnumData < sRangeOver-1) {
+		++*psEnumData;
+	} else {
+		*psEnumData = sMinimum;
+	}
 }

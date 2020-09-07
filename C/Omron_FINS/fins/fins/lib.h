@@ -35,3 +35,5 @@ typedef enum {
 // EN_RETURN_CODE decToASCIIHex_s(unsigned short usVal, int iFig, unsigned char *ptar,unsigned char ucSz);
 unsigned char* decToASCIIHex(unsigned short usVal, int iFig);
 unsigned char *my_strcpy(unsigned char *dest, const unsigned char *src);
+void UpEnumParameter(short* psEnumData, short sRangeOver);
+void UpEnumParameter2(short* psEnumData, short sMinimum, short sRangeOver);

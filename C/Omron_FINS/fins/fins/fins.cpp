@@ -3,18 +3,32 @@
 #include "Test.h"
 #include <string>
 
+//** ﾃﾞﾊﾞｯｸﾞ　ﾌﾟﾘﾌﾟﾛｾｯｻ */
+#ifdef _DEBUG
+volatile struct TDATA_SH tdat; // SH2で使用するティーチングデータ
+// unsigned char ucTemp[200];                      // 作業用ﾊﾞｯﾌｧ
+
+typedef struct
+{
+    unsigned char uc_CommDatBuf[200]; //! 送受信ﾊﾞｯﾌｧ
+    unsigned char *puc_commdatbufCur; //! 送受信ﾊﾞｯﾌｧﾎﾟｲﾝﾀ
+} TS_COMM_BUF;
+
+TS_COMM_BUF ts_SendDatTemp; // 送信ﾊﾞｯﾌｧ
+TS_COMM_BUF ts_RecvDatTemp; // 受信ﾊﾞｯﾌｧ
+
+#endif
+
 //** 定数宣言 */
 //! FINS MEMORY TYPE
 #define DM_TYPE     ("82")          // DM ⇒(82)ASCII
 
 // //! FINS HEADER (ASCII)
-#define FINS_HEADER	"@00FA000000000"			// FINS 送信HEADDER @00FA000000000 + 0101  (0101は送信を意味する)
+#define FINS_HEADER	"@00FA000000000"			// FINS 送信HEADDER @00FA000000000
 
 //! FINS COMMAND TYPE (ASCII)
 #define FINS_CMDTYPE_WRITE "0101"
-#define FINS_CMDTYPE_READ "0102" 
-
-
+#define FINS_CMDTYPE_READ "0102"
 
 //** 列挙　宣言部 */
 //! FINS ｺﾏﾝﾄﾞ
@@ -40,21 +54,21 @@ typedef enum{
 //! FINS通信関連　ﾃﾞｰﾀ構造体
 typedef struct
 {
-    TE_FINSCMD te_cmd;					// 通信ｺﾏﾝﾄﾞ
-    TE_FINSDIRE te_direction;			// 通信方向
-    unsigned char	uc_MemType[3];			// 通信先 PLCﾒﾓﾘﾀｲﾌﾟ(2byte)
-    unsigned char  uc_Addr[5];            // 送受信　先頭ｱﾄﾞﾚｽ(ASCII 4byte)
-    unsigned char   uc_Sz;                  // 送受信 ｱﾄﾞﾚｽ領域ｻｲｽﾞ
-}TS_FINS_INF;
+    TE_FINSCMD te_cmd;           // 通信ｺﾏﾝﾄﾞ
+    TE_FINSDIRE te_direction;    // 通信方向
+    unsigned char uc_MemType[3]; // 通信先 PLCﾒﾓﾘﾀｲﾌﾟ(2byte)
+    unsigned char uc_Addr[5];    // 送受信　先頭ｱﾄﾞﾚｽ(ASCII 4byte)
+    unsigned char uc_Sz;         // 送受信 ｱﾄﾞﾚｽ領域ｻｲｽﾞ
+} TS_FINS_INF;
 
 //** 定数宣言 */
-//!　PLC通信ｺﾏﾝﾄﾞ 定数部 
+//!　PLC通信ｺﾏﾝﾄﾞ 定数部
 const TS_FINS_INF FINS_INF[en_FINSCMD_NUM] = {
-    {en_FINSCMD_DM0,    en_FINSDIRE_WRITE, DM_TYPE, "0000",20},       // DM0ｺﾏﾝﾄﾞ
-    {en_FINSCMD_DM20,   en_FINSDIRE_WRITE, DM_TYPE, "0014",20},       // DM20ｺﾏﾝﾄﾞ
-    {en_FINSCMD_DM1000, en_FINSDIRE_WRITE, DM_TYPE, "03E8",20},       // DM1000ｺﾏﾝﾄﾞ
-    {en_FINSCMD_DM1500, en_FINSDIRE_WRITE, DM_TYPE, "05DC",20},       // DM1500ｺﾏﾝﾄﾞ
-    {en_FINSCMD_DM1520, en_FINSDIRE_WRITE, DM_TYPE, "05F0",20}       // DM1520ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM0, en_FINSDIRE_WRITE, DM_TYPE, "0000", 20},    // DM0ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM20, en_FINSDIRE_WRITE, DM_TYPE, "0014", 20},   // DM20ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM1000, en_FINSDIRE_WRITE, DM_TYPE, "03E8", 20}, // DM1000ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM1500, en_FINSDIRE_WRITE, DM_TYPE, "05DC", 20}, // DM1500ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM1520, en_FINSDIRE_WRITE, DM_TYPE, "05F0", 20}  // DM1520ｺﾏﾝﾄﾞ
 };
 
 
@@ -62,17 +76,13 @@ const TS_FINS_INF FINS_INF[en_FINSCMD_NUM] = {
 
 
 //** 静的関数　宣言 */
-static void FINS_CommString(TE_FINSDIRE en_dire, const unsigned char *pcuc_MemType, const unsigned char *pucAdd, unsigned char ucSz, unsigned char *pcFINS_DatSection); // FINS　通信文字列生成
+static void FINS_CommString(TE_FINSDIRE en_dire, const unsigned char *pcuc_MemType, const unsigned char *pucAdd, unsigned char ucSz, unsigned char *pcFINS_DatSection,TS_COMM_BUF* pComBuf); // FINS　通信文字列生成
 
-static void CreateFinsDatSection(); // FINS 通信ﾃﾞｰﾀ部生成
+static EN_RETURN_CODE CreateFinsDatSection(TE_FINSCMD encmd, unsigned char *pucDat, unsigned char ucSz); // FINS 通信ﾃﾞｰﾀ部生成
 
 static void Parser_RecvDat();   // FINS 受信ﾃﾞｰﾀ解析
 
-//** ﾃﾞﾊﾞｯｸﾞ　ﾌﾟﾘﾌﾟﾛｾｯｻ */
-#ifdef _DEBUG
-volatile struct TDATA_SH tdat;					// SH2で使用するティーチングデータ
-unsigned char ucTemp[200];                      // 作業用ﾊﾞｯﾌｧ
-#endif
+
 
 /**
  * FINS　ﾃﾞｰﾀ部を生成
@@ -141,106 +151,22 @@ static EN_RETURN_CODE CreateFinsDatSection(TE_FINSCMD encmd, unsigned char *pucD
         pucDat = my_strcpy(pucDat, decToASCIIHex(0, 4)); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
         pucDat = my_strcpy(pucDat, decToASCIIHex(0, 4)); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
 
-        // //!  DM0 ~ DM19 書き込み
-        // // DM0 ~ DM..
-        // // PP1ｻｲｸﾙﾀｲﾑｱｳﾄ(4桁)
-        // decToASCIIHex(tdat.g_tm.PP_T1, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP出引動作ﾀｲﾑｱｳﾄ(4桁)
-        // decToASCIIHex(tdat.g_tm.PP_T2, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP開閉動作ﾀｲﾑｱｳﾄ(4桁)
-        // decToASCIIHex(tdat.g_tm.PP_T3, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP原点復帰動作ﾀｲﾑｱｳﾄ
-        // decToASCIIHex(tdat.g_tm.PP_T4, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP原点復帰offﾃﾞｨﾚｰﾀｲﾏ(開閉)
-        // decToASCIIHex(tdat.g_tm.PP_T5, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP原点復帰onﾃﾞｨﾚｰﾀｲﾏ(開閉)
-        // decToASCIIHex(tdat.g_tm.PP_T6, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP原点復帰offﾃﾞｨﾚｰﾀｲﾏ(伸縮)
-        // decToASCIIHex(tdat.g_tm.PP_T7, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // PP原点復帰onﾃﾞｨﾚｰﾀｲﾏ(伸縮)
-        // decToASCIIHex(tdat.g_tm.PP_T8, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4,ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-
-        // // 微小開動作
-        // decToASCIIHex(6666, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp);
-        // // decToASCIIHex(tdat.g_fw.oPP, 4, ustemp);
-        // // pucDat = my_strcpy(pucDat, ustemp);
-
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // // 予備
-        // memset(ustemp,0x00,sizeof(ustemp));
-        // decToASCIIHex(0, 4, ustemp);
-        // pucDat = my_strcpy(pucDat, ustemp); // 予備 (4byte分ｲﾝｸﾘﾒﾝﾄ)
-        // break;
+     break;
     }
     }
 }
 
-// FINS　書込通信
-static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemType, const unsigned char* pucAdd, unsigned char ucSz, unsigned char* pcFINS_DatSection)
+
+static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemType, const unsigned char* pucAdd, unsigned char ucSz, unsigned char* pcFINS_DatSection,TS_COMM_BUF* pComBuf)
 {
-    unsigned char* pcur = ucTemp;
+    unsigned char* pcur = pComBuf->uc_CommDatBuf;
     char cFcs;
     unsigned char* pfciIdx;     // FCI導出時にFOR文で使用する
-    unsigned char ucbuf[5];     //作業用ﾊﾞｯﾌｧ
     
-    memset( ucTemp, 0x00, sizeof( ucTemp));
-
+    memset( pComBuf->uc_CommDatBuf, 0x00, sizeof( pComBuf->uc_CommDatBuf));     // 送信ﾊﾞｯﾌｧ初期化
 
     //! 通信HEADER生成 
-    pcur = my_strcpy(ucTemp, (unsigned char*)FINS_HEADER);
+    pcur = my_strcpy(pcur, (unsigned char*)FINS_HEADER);
 
     //! 通信方向
     pcur =  (en_dire ==en_FINSDIRE_WRITE) ? my_strcpy(pcur,(unsigned char*)FINS_CMDTYPE_WRITE) :my_strcpy(pcur,(unsigned char*)FINS_CMDTYPE_READ);
@@ -255,7 +181,6 @@ static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemT
     pcur = my_strcpy(pcur, (unsigned char *)"00");
 
  	//! ｻｲｽﾞ (4桁)
-     memset( ucbuf, NULL,sizeof(ucbuf)); 
     pcur =my_strcpy( pcur, decToASCIIHex(ucSz, 4));
 
  	//! ﾃﾞｰﾀ部
@@ -263,7 +188,7 @@ static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemT
 
  	//! FCI
   	cFcs = 0;								
-	for( pfciIdx =ucTemp; *pfciIdx !=NULL;){
+	for( pfciIdx = pComBuf->uc_CommDatBuf; *pfciIdx !=NULL;){
 		cFcs ^= *pfciIdx++;
 	}
     pcur = my_strcpy(pcur, decToASCIIHex(cFcs, 2));
@@ -275,6 +200,93 @@ static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemT
      *pcur++;
 }
 
+/**
+* 受信文字列を解析
+*
+* @param[in] 
+* @param[out] 
+* @return 
+*/
+static void Parser_RecvDat(TE_FINSDIRE en_dire)
+{
+//    char	*pSinb;
+//	char	cFcs;
+////	short	nLowDat, nHiDat;
+//	
+//	pSinb = &g_S3inb[0];
+//	if( *pSinb != '@') {						// Start Code OK?
+//		return;
+//	}
+//												// FCS演算
+//	for( cFcs = 0; *(pSinb + 2) != '*'; pSinb++) {
+//		cFcs ^= *pSinb;
+//	}
+//												// FCS OK?
+//	if( Ihex( *pSinb, *(pSinb + 1) ) != cFcs ) {
+//		return;
+//	}
+//
+//	pSinb = &g_S3inb[3];
+//	if( Ihexn( pSinb, 4) != 0xfa00) {			// Hedder,Rcode OK?
+//		return;
+//	}
+//	pSinb += 4;
+//	if( Ihexn( pSinb, 4) != 0x4000) {			// ICF+DA2 OK?
+//		return;
+//	}
+//	pSinb += 4;
+//	if( Ihexn( pSinb, 4) != 0x0000) {			// SA2+SID OK?
+//		return;
+//	}
+//	pSinb += 4;
+//
+//	if (!g_cS3TflgA){
+//
+//	switch( g_cS3Tflg) {
+//	case 0:										// ポーリング
+//		
+//		if( Ihexn( pSinb, 4) != 0x0101) {		// 読み出しｺﾏﾝﾄﾞ?
+//			break;
+//		}
+//		pSinb += 4;
+//		if( Ihexn( pSinb, 4) != 0x0000) {		// 正常終了?
+//			break;
+//		}
+//		pSinb += 4;
+//
+//		g_Read_D1000 = Ihexn( pSinb, 4 );		// D1000
+//		pSinb += 4;
+//
+////		g_Read_D1001 = Ihexn( pSinb, 4 );		// D1001
+//
+//		pSinb += 40;
+//
+//		g_Read_D1010 = Ihexn( pSinb, 4 );		// D1010
+//		pSinb += 4;
+//		g_Read_D1011 = Ihexn( pSinb, 4 );		// D1011
+//		pSinb += 4;
+//
+////		g_lRead_D0 = (long)((unsigned int)nHiDat << 16) | (unsigned int)nLowDat;
+//
+//		break;
+//
+//	case 1:
+//
+//		pSinb += 4;
+//		if( Ihexn( pSinb, 4) != 0x0000) {		// 正常終了?
+//			break;
+//		}
+//		pSinb += 4;
+//		g_cS3Txd[0] = 0;						// 完了
+//		strcpy( g_cS3Rxd, pSinb);				// 受信データをコピー
+//		break;
+//	}
+//	}else if(g_cS3TflgA){
+//		
+//	} 
+}
+
+#ifdef _DEBUG
 int main()
 {
     unsigned char ucBuff[200];
@@ -290,6 +302,12 @@ int main()
 
     CreateFinsDatSection(en_FINSCMD_DM0, ucBuff, sizeof(ucBuff));
 
-    FINS_CommString(FINS_INF[en_FINSCMD_DM0].te_direction, FINS_INF[en_FINSCMD_DM0].uc_MemType, FINS_INF[en_FINSCMD_DM0].uc_Addr, FINS_INF[en_FINSCMD_DM0].uc_Sz, ucBuff);
+    // 送信ﾊﾞｯﾌｧ ｸﾘｱ
+    memset(ts_SendDatTemp.uc_CommDatBuf, 0x00, sizeof(ts_SendDatTemp.uc_CommDatBuf));
+    ts_SendDatTemp.puc_commdatbufCur = ts_SendDatTemp.uc_CommDatBuf;
+
+    FINS_CommString(FINS_INF[en_FINSCMD_DM0].te_direction, FINS_INF[en_FINSCMD_DM0].uc_MemType, FINS_INF[en_FINSCMD_DM0].uc_Addr, FINS_INF[en_FINSCMD_DM0].uc_Sz, ucBuff, &ts_SendDatTemp);
+
     return 0;
 }
+#endif

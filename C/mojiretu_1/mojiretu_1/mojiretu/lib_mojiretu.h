@@ -12,5 +12,5 @@ int decToASCIIHex(unsigned short n, unsigned char ucFig, unsigned char *pchar);
 char *my_strcpy(char *dest, const char *src);
 
 //! •¶Žš—ñÎß²ÝÀ‚É•¶Žš’Ç‰Á
-void AddValASCII2USHORT(unsigned short usval, unsigned char ucFig,unsigned char* pchar);
+unsigned char* AddValASCII2USHORT(unsigned short usval, unsigned char ucFig,unsigned char* pchar);
 
