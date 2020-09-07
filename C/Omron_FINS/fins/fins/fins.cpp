@@ -17,6 +17,10 @@ typedef struct
 TS_COMM_BUF ts_SendDatTemp; // 送信ﾊﾞｯﾌｧ
 TS_COMM_BUF ts_RecvDatTemp; // 受信ﾊﾞｯﾌｧ
 
+unsigned char Ichg(unsigned char i);
+unsigned char Ihex(unsigned char i, unsigned char j);
+unsigned short Ihexn(unsigned char *asc, unsigned char cnt);
+
 #endif
 
 //** 定数宣言 */
@@ -66,7 +70,7 @@ typedef struct
 const TS_FINS_INF FINS_INF[en_FINSCMD_NUM] = {
     {en_FINSCMD_DM0, en_FINSDIRE_WRITE, DM_TYPE, "0000", 20},    // DM0ｺﾏﾝﾄﾞ
     {en_FINSCMD_DM20, en_FINSDIRE_WRITE, DM_TYPE, "0014", 20},   // DM20ｺﾏﾝﾄﾞ
-    {en_FINSCMD_DM1000, en_FINSDIRE_WRITE, DM_TYPE, "03E8", 20}, // DM1000ｺﾏﾝﾄﾞ
+    {en_FINSCMD_DM1000, en_FINSDIRE_READ, DM_TYPE, "03E8", 20}, // DM1000ｺﾏﾝﾄﾞ
     {en_FINSCMD_DM1500, en_FINSDIRE_WRITE, DM_TYPE, "05DC", 20}, // DM1500ｺﾏﾝﾄﾞ
     {en_FINSCMD_DM1520, en_FINSDIRE_WRITE, DM_TYPE, "05F0", 20}  // DM1520ｺﾏﾝﾄﾞ
 };
@@ -80,9 +84,8 @@ static void FINS_CommString(TE_FINSDIRE en_dire, const unsigned char *pcuc_MemTy
 
 static EN_RETURN_CODE CreateFinsDatSection(TE_FINSCMD encmd, unsigned char *pucDat, unsigned char ucSz); // FINS 通信ﾃﾞｰﾀ部生成
 
-static void Parser_RecvDat();   // FINS 受信ﾃﾞｰﾀ解析
-
-
+static EN_RETURN_CODE Check_RecvDat(TE_FINSDIRE en_dire, TS_COMM_BUF *ptsComBuf); // FINS 受信ﾃﾞｰﾀ整合性のﾁｪｯｸ
+static EN_RETURN_CODE Parser_RecvDat(TE_FINSCMD en_cmd, TS_COMM_BUF *ptsComBuf);  // FINS 受信ﾃﾞｰﾀ解析
 
 /**
  * FINS　ﾃﾞｰﾀ部を生成
@@ -154,9 +157,17 @@ static EN_RETURN_CODE CreateFinsDatSection(TE_FINSCMD encmd, unsigned char *pucD
      break;
     }
     }
+
+	return en_RETURN_CODE_OK;
 }
 
-
+/**
+* FINS 送信ﾃﾞｰﾀ文字列生成
+*
+* @param[in] 
+* @param[out] 
+* @return 
+*/
 static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemType, const unsigned char* pucAdd, unsigned char ucSz, unsigned char* pcFINS_DatSection,TS_COMM_BUF* pComBuf)
 {
     unsigned char* pcur = pComBuf->uc_CommDatBuf;
@@ -201,46 +212,121 @@ static void FINS_CommString( TE_FINSDIRE en_dire, const unsigned char* pcuc_MemT
 }
 
 /**
-* 受信文字列を解析
+* FINS 受信文字列を解析
 *
 * @param[in] 
 * @param[out] 
 * @return 
 */
-static void Parser_RecvDat(TE_FINSDIRE en_dire)
+static EN_RETURN_CODE Check_RecvDat(TE_FINSDIRE en_dire, TS_COMM_BUF *ptsComBuf)
 {
-//    char	*pSinb;
-//	char	cFcs;
-////	short	nLowDat, nHiDat;
-//	
-//	pSinb = &g_S3inb[0];
-//	if( *pSinb != '@') {						// Start Code OK?
-//		return;
-//	}
-//												// FCS演算
-//	for( cFcs = 0; *(pSinb + 2) != '*'; pSinb++) {
-//		cFcs ^= *pSinb;
-//	}
-//												// FCS OK?
-//	if( Ihex( *pSinb, *(pSinb + 1) ) != cFcs ) {
-//		return;
-//	}
-//
-//	pSinb = &g_S3inb[3];
-//	if( Ihexn( pSinb, 4) != 0xfa00) {			// Hedder,Rcode OK?
-//		return;
-//	}
-//	pSinb += 4;
-//	if( Ihexn( pSinb, 4) != 0x4000) {			// ICF+DA2 OK?
-//		return;
-//	}
-//	pSinb += 4;
-//	if( Ihexn( pSinb, 4) != 0x0000) {			// SA2+SID OK?
-//		return;
-//	}
-//	pSinb += 4;
-//
-//	if (!g_cS3TflgA){
+    unsigned char *puc_RecvDatCur = ptsComBuf->uc_CommDatBuf;
+    char cFcs;
+
+    //! '@'確認
+    if (*puc_RecvDatCur != '@') {
+        // 受信ﾃﾞｰﾀ不正
+    }
+
+    //! FCS確認
+    for (cFcs = 0; *(puc_RecvDatCur + 2) != '*'; puc_RecvDatCur++) {
+        cFcs ^= *puc_RecvDatCur;
+    }
+    // FCS OK? (ここの時点では、puc_RecvDatCur はFCSの最初の1byte位置を指し示している）
+    if (Ihex(*puc_RecvDatCur, *(puc_RecvDatCur + 1)) != cFcs) {
+        return en_RETURN_FCS_ERR;
+    }
+
+    //!   Hedder,Rcode OK?
+    puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[3];
+    if (Ihexn(puc_RecvDatCur, 4) != 0xfa00) { // Hedder,Rcode OK?
+        return en_RETUEN_RECVDAT_ERR;
+    }
+
+    //! ICF+DA2 OK?
+    puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[7];
+    if (Ihexn(puc_RecvDatCur, 4) != 0x4000) { // Hedder,Rcode OK?
+        return en_RETUEN_RECVDAT_ERR;
+    }
+
+    //! SA2+SID OK?
+    puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[11];
+    if (Ihexn(puc_RecvDatCur, 4) != 0x0000) { // Hedder,Rcode OK?
+        return en_RETUEN_RECVDAT_ERR;
+    }
+
+    //! ｱﾄﾞﾚｽ先書き込みor読み込みで処理分岐
+    if (en_dire == en_FINSDIRE_READ) {
+        //!  0101?
+        puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[15];
+        if (Ihexn(puc_RecvDatCur, 4) != 0x0101) { // 読み出しｺﾏﾝﾄﾞ?
+            return en_RETUEN_RECVDAT_ERR;
+        }
+
+        else {
+            //! 0102 省略
+        }
+    }
+
+    //! 正常終了?
+    puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[19];
+    if (en_dire == en_FINSDIRE_READ) {
+       if (Ihexn(puc_RecvDatCur, 4) >= 0x0000) { // 正常終了?
+            return en_RETUEN_RECVDAT_ERR;
+        }
+    } else {
+      
+        if (Ihexn(puc_RecvDatCur, 4) != 0x0000) { // 正常終了?
+            return en_RETUEN_RECVDAT_ERR;
+        }
+    }
+
+    return en_RETURN_CODE_OK;
+}
+
+/**
+* FINS 受信文字 解析
+*
+* @param[in] 
+* @param[out] 
+* @return 
+*/
+static EN_RETURN_CODE Parser_RecvDat(TE_FINSCMD en_cmd, TS_COMM_BUF *ptsComBuf)
+{
+    unsigned char *puc_RecvDatCur;
+    unsigned short usbuf;
+
+    switch (en_cmd) {
+    case en_FINSCMD_DM1000: {
+        puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[19];
+
+        usbuf = Ihexn(puc_RecvDatCur, 4); // 受信ﾒﾓﾘﾊﾞｯﾌｧｻｲｽﾞ取得
+        if (usbuf != 20) {
+            return en_RETURN_CODE_NG;
+        }
+
+        // DM1000取得
+        puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[23];
+        usbuf          = Ihexn(puc_RecvDatCur, 4);
+        g_Read_D1000   = (short)usbuf;
+
+        // DM1010取得
+        puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[23 + 4 * 10];
+        usbuf          = Ihexn(puc_RecvDatCur, 4);
+        g_Read_D1010   = (short)usbuf;
+
+        // DM1011取得
+        puc_RecvDatCur = &ptsComBuf->uc_CommDatBuf[23 + 4 * 11];
+        usbuf          = Ihexn(puc_RecvDatCur, 4);
+        g_Read_D1011   = (short)usbuf;
+
+        break;
+    }
+    }
+
+    return en_RETURN_CODE_OK;
+}
+
 //
 //	switch( g_cS3Tflg) {
 //	case 0:										// ポーリング
@@ -253,7 +339,7 @@ static void Parser_RecvDat(TE_FINSDIRE en_dire)
 //			break;
 //		}
 //		pSinb += 4;
-//
+//n
 //		g_Read_D1000 = Ihexn( pSinb, 4 );		// D1000
 //		pSinb += 4;
 //
@@ -284,9 +370,41 @@ static void Parser_RecvDat(TE_FINSDIRE en_dire)
 //	}else if(g_cS3TflgA){
 //		
 //	} 
-}
+//}
 
 #ifdef _DEBUG
+
+unsigned char Ichg(unsigned char i)
+{
+    unsigned char j;
+    j = 0;
+    if ((i >= 0x30) && (i < 0x3a)) /* 0....9 */
+        j = i & 0x0f;
+    if ((i >= 0x41) && (i < 0x47)) /* A....F */
+        j = i - 0x37;
+    return (j);
+}
+unsigned char	Ihex(unsigned char	i,unsigned char	j)
+{
+	unsigned char	k;
+
+	k = (Ichg(i) << 4) + Ichg(j);
+	return(k);
+}
+
+unsigned short Ihexn(unsigned char	*asc,unsigned char	cnt)
+{
+	int hex;
+
+	for( hex = 0; cnt != 0; cnt--){
+		hex |= Ichg( *asc++) << ((cnt-1) * 4);
+		}
+	return( hex);
+}
+
+
+
+
 int main()
 {
     unsigned char ucBuff[200];
