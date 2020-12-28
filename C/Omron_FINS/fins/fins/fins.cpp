@@ -403,8 +403,6 @@ unsigned short Ihexn(unsigned char	*asc,unsigned char	cnt)
 }
 
 
-
-
 int main()
 {
     unsigned char ucBuff[200];
